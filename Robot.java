@@ -4,32 +4,55 @@
 
 package frc.robot;
 
+import com.ctre.phoenix.motorcontrol.TalonFXFeedbackDevice;
 import com.ctre.phoenix.motorcontrol.can.WPI_TalonFX;
+import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
 //import com.ctre.phoenix.motorcontrol.can.WPI_TalonSRX;
 import com.kauailabs.navx.frc.AHRS;
 //import com.revrobotics.CANSparkMax;
 //import com.revrobotics.CANSparkMaxLowLevel.MotorType;
+//import com.kauailabs.navx.frc.AHRS.SerialDataType;
 
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.Timer;
+import edu.wpi.first.wpilibj.SerialPort.Port;
+//import edu.wpi.first.wpilibj.command.Command;
 import edu.wpi.first.wpilibj.drive.MecanumDrive;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.first.networktables.NetworkTable;
-import edu.wpi.first.networktables.NetworkTableEntry;
-import edu.wpi.first.networktables.NetworkTableInstance;
+//import edu.wpi.first.networktables.NetworkTable;
+//import edu.wpi.first.networktables.NetworkTableEntry;
+//import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
+import edu.wpi.first.math.trajectory.TrapezoidProfile;
+import edu.wpi.first.wpilibj.AnalogInput;
+import edu.wpi.first.wpilibj.Compressor;
+import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.Joystick;
+import edu.wpi.first.wpilibj.PneumaticsModuleType;
 /**
  * The VM is configured to automatically run this class, and to call the functions corresponding to
  * each mode, as described in the TimedRobot documentation. If you change the name of this class or
  * the package after creating this project, you must also update the build.gradle file in the
  * project.
  */
+import edu.wpi.first.wpilibj.Solenoid;
+
+
 public class Robot extends TimedRobot {
 
   private final SendableChooser<String> m_chooser = new SendableChooser<>();
+    
+  private static final String Test = "Test";
+  private static final String OneMove = "OneMove";
+  private static final String None = "None";
+  private static final String twoBalls = "twoBalls";
+  private static final String threeBalls = "threeBalls";
 
+  private String m_autoSelected;
+
+  Timer timer = new Timer();
   
   WPI_TalonFX FLeft = new WPI_TalonFX(0);
   WPI_TalonFX BLeft = new WPI_TalonFX(1);
@@ -37,17 +60,33 @@ public class Robot extends TimedRobot {
   WPI_TalonFX BRight = new WPI_TalonFX(3);
   MecanumDrive mecanum = new MecanumDrive(FLeft, BLeft, FRight, BRight);
 
-  Joystick joy = new Joystick(0);
-  //mechanisms' motors
-  //WPI_TalonSRX intakeLeft = new WPI_TalonSRX(0);
-  //WPI_TalonSRX intakeRight = new WPI_TalonSRX(0);
- // WPI_TalonSRX intakeBelt = new WPI_TalonSRX(0);
-  //WPI_TalonSRX shootingBelt = new WPI_TalonSRX(0);
-  //CANSparkMax climbMotor = new CANSparkMax(0, MotorType.kBrushless);
+  WPI_TalonSRX intakeLeft = new WPI_TalonSRX(4);
+  WPI_TalonSRX intakeRight = new WPI_TalonSRX(8);
+  WPI_TalonSRX intakeBelt = new WPI_TalonSRX(7);
 
+  WPI_TalonSRX shooter = new WPI_TalonSRX(6);
+
+  WPI_TalonSRX climber = new WPI_TalonSRX(5);
+
+  TrapezoidProfile.Constraints constraints = new TrapezoidProfile.Constraints(10, 20);
+  TrapezoidProfile.State state = new TrapezoidProfile.State(5, 0);
+  TrapezoidProfile profile = new TrapezoidProfile(new TrapezoidProfile.Constraints(5, 10), new TrapezoidProfile.State(5, 0), new TrapezoidProfile.State(0, 0));
+
+  Joystick joy = new Joystick(0);
+
+
+  //Encoder Converter
+  double distEncode = 26465/18; //26,465 units per 18 inches
+  double sideEncode = 2065; 
+  //Encoder Double Values
+  double bLeftPos;
+  double bRightPos;
+  double fLeftPos;
+  double fRightPos;
+  double navXV;
 
   //sensors
-  AHRS navX = new AHRS();
+  AHRS navX = new AHRS(Port.kMXP);
 
   // X52 button mapping 
   int axisX = 0;// axis 1
@@ -86,6 +125,9 @@ public class Robot extends TimedRobot {
   int button = 31;
   int scroll = 32;
 
+  //autonomous
+  int x = 1;
+
 
   //limelight:
   // NetworkTable table = NetworkTableInstance.getDefault().getTable("limelight");
@@ -96,20 +138,33 @@ public class Robot extends TimedRobot {
   // double y = ty.getDouble(0.0);
   // double area = ta.getDouble(0.0);
 
-  // private Command m_autonomousCommand;
+  private Command m_autonomousCommand;
 
-  // private RobotContainer m_robotContainer;
+  private RobotContainer m_robotContainer;
 
+  //Pneumatics
+  Compressor compressor = new Compressor(PneumaticsModuleType.CTREPCM);
+  Solenoid wave = new Solenoid(PneumaticsModuleType.CTREPCM, 0);
+
+  // Limit Switches
+  AnalogInput upperLim = new AnalogInput(1);
+  AnalogInput lowerLim = new AnalogInput(0);
   /**
    * This function is run when the robot is first started up and should be used for any
    * initialization code.
    */
+
   @Override
   public void robotInit() {
-    // m_robotContainer = new RobotContainer();
 
 
     SmartDashboard.putData("Auto choices", m_chooser);
+    m_chooser.addOption("Test", Test);
+    m_chooser.addOption("OneMove", OneMove);
+    m_chooser.addOption("None", None);
+    m_chooser.addOption("twoBalls", twoBalls);
+    m_chooser.addOption("oneBall", threeBalls);
+    m_robotContainer = new RobotContainer();
 
     //climber.configSelectedFeedbackSensor();
     BRight.setSafetyEnabled(false);
@@ -117,12 +172,15 @@ public class Robot extends TimedRobot {
     BLeft.setSafetyEnabled(false);
     FLeft.setSafetyEnabled(false); 
     mecanum.setSafetyEnabled(false);
+    //reverse direction of the left side motors
     BLeft.setInverted(true);
     FLeft.setInverted(true);
 
 
   //  SmartDashboard.putNumber("Limelight", x);
     
+    // Compressor
+    compressor.enableDigital();
 
     // Instantiate our RobotContainer.  This will perform all our button bindings, and put our
     // autonomous chooser on the dashboard.
@@ -145,6 +203,21 @@ public class Robot extends TimedRobot {
     // and running subsystem periodic() methods.  This must be called from the robot's periodic
     // block in order for anything in the Command-based framework to work.
     CommandScheduler.getInstance().run();
+
+    bLeftPos = BLeft.getSelectedSensorPosition(TalonFXFeedbackDevice.IntegratedSensor.value);
+    bRightPos = BRight.getSelectedSensorPosition(TalonFXFeedbackDevice.IntegratedSensor.value);
+    fLeftPos = FLeft.getSelectedSensorPosition(TalonFXFeedbackDevice.IntegratedSensor.value);
+    fRightPos = FRight.getSelectedSensorPosition(TalonFXFeedbackDevice.IntegratedSensor.value);
+    navXV = navX.getAngle();
+
+
+    SmartDashboard.putNumber("Back Left Position", bLeftPos);
+    SmartDashboard.putNumber("Back Right Position", bRightPos);
+    SmartDashboard.putNumber("Front Left Position", fLeftPos);
+    SmartDashboard.putNumber("Front Right Position", fRightPos);
+    SmartDashboard.putNumber("navX:",navXV);
+    SmartDashboard.putNumber("x:", x);
+
   }
 
   /** This function is called once each time the robot enters Disabled mode. */
@@ -157,23 +230,232 @@ public class Robot extends TimedRobot {
   /** This autonomous runs the autonomous command selected by your {@link RobotContainer} class. */
   @Override
   public void autonomousInit() {
-    // m_autonomousCommand = m_robotContainer.getAutonomousCommand();
 
-    // // schedule the autonomous command (example)
-    // if (m_autonomousCommand != null) {
-    //   m_autonomousCommand.schedule();
-    // }
+    timer.start();
+
+    BLeft.setSelectedSensorPosition(0);
+    BRight.setSelectedSensorPosition(0);
+    FLeft.setSelectedSensorPosition(0);
+    FRight.setSelectedSensorPosition(0);
+
+    x = 1;
+    m_autonomousCommand = m_robotContainer.getAutonomousCommand();
+
+    // schedule the autonomous command (example)
+    if (m_autonomousCommand != null) {
+      m_autonomousCommand.schedule();
+    }
+
   }
 
+
+  
 
   /** This function is called periodically during autonomous. */
   @Override
   public void autonomousPeriodic() {
+    m_autoSelected = m_chooser.getSelected();
+    switch(m_autoSelected){
+      //test
+      case Test:
+        if(FLeft.getSelectedSensorPosition() > -24*distEncode){
+          mecanum.driveCartesian(-0.25, 0, 0);
+        }else{
+          mecanum.driveCartesian(0, 0, 0);
+        }
+      break;
+      //oneMove
+      case OneMove:
+        if(BRight.getSelectedSensorPosition() > -24*distEncode && x == 1){
+          mecanum.driveCartesian(-0.25, 0, 0);
+        }else if(x == 1){
+          mecanum.driveCartesian(0, 0, 0);
+          BRight.setSelectedSensorPosition(0);
+          x = 2;
+        }
+        if(BRight.getSelectedSensorPosition() < 15*sideEncode && x == 2){
+          mecanum.driveCartesian(0, 0.25, 0);
+        }else if(x == 2){
+          mecanum.driveCartesian(0, 0, 0);
+          x = 3;
+        }
+      break;
+      //twoBalls
+      case threeBalls:
+        if(x == 1 && timer.get() < 3){
+          Shooter();
+        }else if(x == 1){
+          x = 2;
+        }
+        if(BRight.getSelectedSensorPosition() > -125*distEncode && x == 2){
+          mecanum.driveCartesian(0.5, 0, 0);
+        }else if(x == 2){
+          mecanum.driveCartesian(0, 0, 0);
+          BRight.setSelectedSensorPosition(0);
+          x = 3;
+          timer.reset();
+        }
+        if(x == 3 && timer.get() < 3){
+          Intake();
+        }else if(x == 3){
+          x = 4;
+        }
+        if(BRight.getSelectedSensorPosition() < 125*distEncode && x == 4){
+          mecanum.driveCartesian(0.5, 0, 0);
+          timer.reset();
+        }else if(x == 4 && timer.get() < 3){
+          mecanum.driveCartesian(0, 0, 0);
+          Shooter();
+          x = 5;
+        }
+        if(navX.getAngle() < 65 && x == 5){
+          mecanum.driveCartesian(0, 0.5, 0);
+        }else if(x == 5){
+          mecanum.driveCartesian(0, 0, 0);
+          x = 6;
+          BRight.setSelectedSensorPosition(0);
+        }
+        if(BRight.getSelectedSensorPosition() < -140*distEncode && x == 6){
+          mecanum.driveCartesian(0.5, 0, 0);
+        }else if(x == 6){
+          mecanum.driveCartesian(0, 0, 0);
+          x = 7;
+          timer.reset();
+        }
+        if(x == 7 && timer.get() < 3){
+          Intake();
+        }else if(x == 7){
+          BRight.setSelectedSensorPosition(0);
+          timer.reset();
+          x = 8;
+        }
+        if(BRight.getSelectedSensorPosition() < 140*distEncode && x == 8){
+          mecanum.driveCartesian(-0.5, 0, 0);
+        }else if(x == 8 && timer.get() < 3){
+          mecanum.driveCartesian(0, 0, 0);
+          Shooter();
+          x = 9;
+        }
 
-    //mecanum.driveCartesian(0, 50, 0);
+      break;
+      //oneBall
+      case twoBalls:
+        if(x == 1 && timer.get() < 3){
+          Shooter();
+        }else if(x == 1){
+          x = 2;
+        }
+        if(BRight.getSelectedSensorPosition() > -125*distEncode && x == 2){
+          mecanum.driveCartesian(0.5, 0, 0);
+        }else if(x == 2){
+          mecanum.driveCartesian(0, 0, 0);
+          BRight.setSelectedSensorPosition(0);
+          x = 3;
+          timer.reset();
+        }
+        if(x == 3 && timer.get() < 3){
+          Intake();
+        }else if(x == 3){
+          x = 4;
+        }
+        if(BRight.getSelectedSensorPosition() < 125*distEncode && x == 4){
+          mecanum.driveCartesian(0.5, 0, 0);
+          timer.reset();
+        }else if(x == 4 && timer.get() < 3){
+          mecanum.driveCartesian(0, 0, 0);
+          Shooter();
+          x = 5;
+        }
+      break;
+      default:
+        mecanum.driveCartesian(0, 0, 0);
+        System.out.println("default :]");
+      break;
+    }
 
-  }
 
+    // if(FLeft.getSelectedSensorPosition() < 24*distEncode){
+    //   mecanum.driveCartesian(0.25, 0, 0);
+    // }else{
+    //   mecanum.driveCartesian(0, 0, 0);
+    // }
+
+    // //goes backwards
+    // if(FLeft.getSelectedSensorPosition() < 24*distEncode && x == 1){
+    //   mecanum.driveCartesian(0.25, 0, 0);
+    // }else if(x == 1){
+    //   x = 2;
+    // }
+    // //turn right
+    // if(navX.getAngle() < 80 && x == 2){
+    //   mecanum.driveCartesian(0, 0, -0.25);
+    // }else if(x == 2){
+    //   mecanum.driveCartesian(0, 0, 0);
+    //   FLeft.setSelectedSensorPosition(0, 0, 0);
+    //   x = 3;
+    // }
+
+    // //goes backwards
+    // if(FLeft.getSelectedSensorPosition() < 24*distEncode && x == 3){
+    //   mecanum.driveCartesian(0.25, 0, 0);
+    // }else if(x == 3){
+    //   navX.reset();
+    //   x = 4;
+    // }
+    // //turns right
+    // if(navX.getAngle() < 80 && x == 4){
+    //   mecanum.driveCartesian(0, 0, -0.25);
+    // }else if(x == 4){
+    //   mecanum.driveCartesian(0, 0, 0);
+    //   FLeft.setSelectedSensorPosition(0, 0, 0);
+    //   x = 5;
+    // }
+
+
+
+    // //goes backwards
+    // if(FLeft.getSelectedSensorPosition() < 24*distEncode && x == 5){
+    //   mecanum.driveCartesian(0.25, 0, 0);
+    // }else if(x == 5){
+    //   navX.reset();
+    //   x = 6;
+    // }
+    // //turn right
+    // if(navX.getAngle() < 80 && x == 6){
+    //   mecanum.driveCartesian(0, 0, -0.25);
+    // }else if(x == 6){
+    //   mecanum.driveCartesian(0, 0, 0);
+    //   FLeft.setSelectedSensorPosition(0, 0, 0);
+    //   x = 7;
+    // }
+
+    // //goes backwards
+    // if(FLeft.getSelectedSensorPosition() < 24*distEncode && x == 7){
+    //   mecanum.driveCartesian(0.25, 0, 0);
+    // }else if(x == 7){
+    //   navX.reset();
+    //   x = 8;
+    // }
+    // //turns right
+    // if(navX.getAngle() < 80 && x == 8){
+    //   mecanum.driveCartesian(0, 0, -0.25);
+    // }else if(x == 8){
+    //   mecanum.driveCartesian(0, 0, 0);
+    //   FLeft.setSelectedSensorPosition(0, 0, 0);
+    //   x = 9;
+    // }
+
+
+  /* if(joy.getRawButton(Fire)){
+    BLeft.setSelectedSensorPosition(0);
+    BRight.setSelectedSensorPosition(bRightPos, 0, 0);
+    FLeft.setSelectedSensorPosition(0, TalonFXFeedbackDevice.IntegratedSensor.value, 0);
+    FRight.setSelectedSensorPosition(0.0, TalonFXFeedbackDevice.IntegratedSensor.value, 0);
+  }*/
+
+
+
+}
   @Override
   public void teleopInit() {
     // This makes sure that the autonomous stops running when
@@ -188,16 +470,71 @@ public class Robot extends TimedRobot {
   /** This function is called periodically during operator control. */
   @Override
   public void teleopPeriodic() {
-    mecanum.driveCartesian(joy.getRawAxis(axisY), joy.getRawAxis(axisX), joy.getRawAxis(rotZ));
-    //Intake();
+    if(joy.getRawButton(Fire)){
+      BLeft.setSelectedSensorPosition(0);
+      BRight.setSelectedSensorPosition(0);
+      FLeft.setSelectedSensorPosition(0);
+      FRight.setSelectedSensorPosition(0);
+
+      navX.reset();
+    }
+
+    mecanum.driveCartesian(-1*joy.getRawAxis(axisY), -1*joy.getRawAxis(axisX), -1*joy.getRawAxis(rotZ));
+    Intake();
+    Shooter();
+    Climber();
   }
   public void Intake(){
+    if(joy.getRawButton(trigger)){
+      intakeLeft.set(-1);
+      intakeRight.set(1);
+      intakeBelt.set(1);
+    }else{
+      intakeLeft.set(0);
+      intakeRight.set(0);
+      intakeBelt.set(0);
+    }
+  }
+  public void Shooter(){
     if(joy.getRawButton(Fire)){
-      mecanum.driveCartesian(0, 50, 0);
+      shooter.set(1);
+      intakeBelt.set(1);
+    }else{
+      shooter.set(0);
     }
-    else{
-      mecanum.driveCartesian(0, 0, 0);
+  }
+  int flagPos = 0;
+  public void Climber(){
+    if(joy.getRawButton(E) && upperLim.getVoltage() < 4){
+      climber.set(1);//up
+    }else if(joy.getRawButton(i) && lowerLim.getVoltage() < 4){
+      climber.set(-1);//down
+    }else{
+      climber.set(0);
     }
+
+    SmartDashboard.putNumber("Upper Limit Voltage", upperLim.getVoltage());
+    
+    //toggle button function for moving the arm 
+    // if(joy.getRawButton(A) && flagPos == 0){
+    //   wave.set(true);
+    // }else if(!joy.getRawButton(A) && flagPos == 0){
+    //   flagPos = 1;
+    // }else if(joy.getRawButton(A) && flagPos == 1){
+    //   wave.set(false);
+    // }else if(!joy.getRawButton(A) && flagPos == 1){
+    //   flagPos = 0;
+    // }
+
+    if(joy.getRawButton(A)){
+      wave.set(true);
+    }else if(joy.getRawButton(B)){
+      wave.set(false);
+    }
+  }
+
+  public void AutoClimb(){
+
   }
 
   @Override
