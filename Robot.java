@@ -73,7 +73,7 @@ public class Robot extends TimedRobot {
   TrapezoidProfile profile = new TrapezoidProfile(new TrapezoidProfile.Constraints(5, 10), new TrapezoidProfile.State(5, 0), new TrapezoidProfile.State(0, 0));
 
   Joystick joy = new Joystick(0);
-  Joystick bitterness = new Joystick(0);
+  Joystick bitterness = new Joystick(1);//needed to be different
 
   //Encoder Converter
   double distEncode = 26465/18; //26,465 units per 18 inches
@@ -232,7 +232,7 @@ public class Robot extends TimedRobot {
     //m_chooser.addOption("OneMove", OneMove);
     m_chooser.addOption("None", None);
     m_chooser.addOption("twoBalls", twoBalls);
-    m_chooser.addOption("oneBall", threeBalls);
+    m_chooser.addOption("threeBalls", threeBalls);
   }
 
   /** This function is called once each time the robot enters Disabled mode. */
@@ -297,7 +297,7 @@ public class Robot extends TimedRobot {
       case threeBalls:
         if(x == 1 && timer.get() < 3){
           mecanum.driveCartesian(0, 0, 0);
-          //Shooter();
+          Shooter();
         }else if(x == 1){
           x = 2;
         }
@@ -311,7 +311,7 @@ public class Robot extends TimedRobot {
         }
         if(x == 3 && timer.get() < 3){
           mecanum.driveCartesian(0, 0, 0);
-          //Intake();
+          Intake();
         }else if(x == 3){
           x = 4;
         }
@@ -320,7 +320,7 @@ public class Robot extends TimedRobot {
           timer.reset();
         }else if(x == 4 && timer.get() < 3){
           mecanum.driveCartesian(0, 0, 0);
-         // Shooter();
+          Shooter();
           x = 5;
         }
         if(navX.getAngle() < 65 && x == 5){
@@ -339,7 +339,7 @@ public class Robot extends TimedRobot {
         }
         if(x == 7 && timer.get() < 3){
           mecanum.driveCartesian(0, 0, 0);
-          //Intake();
+          Intake();
         }else if(x == 7){
           BRight.setSelectedSensorPosition(0);
           timer.reset();
@@ -349,41 +349,55 @@ public class Robot extends TimedRobot {
           mecanum.driveCartesian(-0.5, 0, 0);
         }else if(x == 8 && timer.get() < 3){
           mecanum.driveCartesian(0, 0, 0);
-          //Shooter();
+          Shooter();
           x = 9;
         }
 
       break;
       //twoBalls autonomous
       case twoBalls:
-        if(x == 1 && timer.get() < 3){
-          //Shooter();
+        if(x == 1 && timer.get() < 2){
+          shooter.set(1);
+          intakeBelt.set(1);
           mecanum.driveCartesian(0, 0, 0);
         }else if(x == 1){
+          shooter.set(0);
+          intakeBelt.set(0);
           x = 2;
         }
-        if(BRight.getSelectedSensorPosition() > -125*distEncode && x == 2){
-          mecanum.driveCartesian(0.5, 0, 0);
+        if(BRight.getSelectedSensorPosition() < 100*distEncode && x == 2){
+          mecanum.driveCartesian(0.25, 0, 0);
         }else if(x == 2){
           mecanum.driveCartesian(0, 0, 0);
           BRight.setSelectedSensorPosition(0);
           x = 3;
           timer.reset();
         }
-        if(x == 3 && timer.get() < 3){
-          //Intake();
+        if(x == 3 && timer.get() < 2){
+          intakeLeft.set(-1);
+          intakeRight.set(1);
+          intakeBelt.set(1);
           mecanum.driveCartesian(0, 0, 0);
         }else if(x == 3){
+          intakeLeft.set(0);
+          intakeRight.set(0);
+          intakeBelt.set(0);
+          BRight.setSelectedSensorPosition(0);
           x = 4;
         }
-        if(BRight.getSelectedSensorPosition() < 125*distEncode && x == 4){
-          mecanum.driveCartesian(0.5, 0, 0);
+        if(BRight.getSelectedSensorPosition() > -100*distEncode && x == 4){
+          mecanum.driveCartesian(-0.25, 0, 0);
           timer.reset();
         }else if(x == 4 && timer.get() < 3){
           mecanum.driveCartesian(0, 0, 0);
-          //Shooter();
+          shooter.set(1);
+          intakeBelt.set(1);
           x = 5;
+        }else if(x == 5){
+          shooter.set(0);
+          intakeBelt.set(0);
         }
+        //the second else if has problems
       break;
       default:
         mecanum.driveCartesian(0, 0, 0);
@@ -416,37 +430,29 @@ public class Robot extends TimedRobot {
 
       navX.reset();
     }
-    //set-up of dead zone for joystick
-    if(Math.abs(joy.getRawAxis(axisX)) > 0.05){
-      joyX = joy.getRawAxis(axisX);
-    }else{
-      joyX = 0;
-    }
-    if(Math.abs(joy.getRawAxis(axisY)) > 0.05){
-      joyY = joy.getRawAxis(axisY);
-    }else{
-      joyY = 0;
-    }
-    mecanum.driveCartesian(joyY, joyX, -1*joy.getRawAxis(rotZ));
+    // //set-up of dead zone for joystick
+    // if(Math.abs(joy.getRawAxis(axisX)) > 0.05){
+    //   joyX = joy.getRawAxis(axisX);
+    // }else{
+    //   joyX = 0;
+    // }
+    // if(Math.abs(joy.getRawAxis(axisY)) > 0.05){
+    //   joyY = joy.getRawAxis(axisY);
+    // }else{
+    //   joyY = 0;
+    // }
+    mecanum.driveCartesian(-1*joy.getRawAxis(axisY), joy.getRawAxis(axisX), -1*joy.getRawAxis(rotZ));
     Intake();
     Shooter();
     Climber();
-    IntakeBack();
   }
   public void Intake(){
     if(joy.getRawButton(trigger)){
       intakeLeft.set(-1);
       intakeRight.set(1);
       intakeBelt.set(1);
-    }else{
-      intakeLeft.set(0);
-      intakeRight.set(0);
-      intakeBelt.set(0);
-    }
-  }
-  public void IntakeBack(){
-    if(joy.getRawButton(pink)){
-      intakeLeft.set(1);
+    }else if(joy.getRawButton(pink)){
+      intakeLeft.set(1);//combine so the two elses don't clash
       intakeRight.set(-1);
       intakeBelt.set(-1);
     }else{
@@ -455,6 +461,7 @@ public class Robot extends TimedRobot {
       intakeBelt.set(0);
     }
   }
+
   public void Shooter(){
     if(joy.getRawButton(Fire)){
       shooter.set(1);
