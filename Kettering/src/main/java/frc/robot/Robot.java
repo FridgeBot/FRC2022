@@ -379,7 +379,7 @@ public class Robot extends TimedRobot {
           intakeBelt.set(0);
           x = 2;
         }
-        if(BRight.getSelectedSensorPosition() < 95*distEncode && x == 2){
+        if(BRight.getSelectedSensorPosition() < 85*distEncode && x == 2){
           mecanum.driveCartesian(0.33, 0, 0);
         }else if(x == 2){
           mecanum.driveCartesian(0, 0, 0);
@@ -418,13 +418,18 @@ public class Robot extends TimedRobot {
         }else if(x == 6){
           shooter.set(0);
           intakeBelt.set(0);
+          BRight.setSelectedSensorPosition(0);
           x = 7;
         }
-        if(x == 7 && BRight.getSelectedSensorPosition() < 90){
+        if(BRight.getSelectedSensorPosition() < 75*distEncode && x == 7){
           mecanum.driveCartesian(0.33, 0, 0);
         }else if(x == 7){
           mecanum.driveCartesian(0, 0, 0);
           x = 8;
+        }if( x == 8 && navX.getAngle() < 1000){
+          mecanum.driveCartesian(0, 0, 0.30);
+        }else if( x == 8){
+          mecanum.driveCartesian(0, 0, 0);
         }
       break;
       default:
