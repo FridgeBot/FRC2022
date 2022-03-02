@@ -47,7 +47,7 @@ public class Robot extends TimedRobot {
   private final SendableChooser<String> m_chooser = new SendableChooser<>();
   //Dashboard options for autonomous 
   private static final String Test = "Test";
-  //private static final String OneMove = "OneMove";
+  private static final String OneMove = "OneMove";
   private static final String None = "None";
   private static final String twoBalls = "twoBalls";
   private static final String threeBalls = "threeBalls";
@@ -229,7 +229,7 @@ public class Robot extends TimedRobot {
     //Dashboard options for autonomous
     SmartDashboard.putData("Auto choices", m_chooser);
     m_chooser.addOption("Test", Test);
-    //m_chooser.addOption("OneMove", OneMove);
+    m_chooser.addOption("OneMove", OneMove);
     m_chooser.addOption("None", None);
     m_chooser.addOption("twoBalls", twoBalls);
     m_chooser.addOption("threeBalls", threeBalls);
@@ -274,6 +274,20 @@ public class Robot extends TimedRobot {
           mecanum.driveCartesian(-0.25, 0, 0);
         }else{
           mecanum.driveCartesian(0, 0, 0);
+        }
+      break;
+      case OneMove:
+        if(x == 1 && timer.get() < 2){
+          shooter.set(1);
+        }else if(x == 1){
+          shooter.set(0);
+          x = 2;
+        }
+        if(BRight.getSelectedSensorPosition() < 80*distEncode && x == 2){
+          mecanum.driveCartesian(0.33, 0, 0);
+        }else if(x == 2){
+          mecanum.driveCartesian(0, 0, 0);
+          x = 3;
         }
       break;
       //oneMove
@@ -365,8 +379,8 @@ public class Robot extends TimedRobot {
           intakeBelt.set(0);
           x = 2;
         }
-        if(BRight.getSelectedSensorPosition() < 100*distEncode && x == 2){
-          mecanum.driveCartesian(0.25, 0, 0);
+        if(BRight.getSelectedSensorPosition() < 85*distEncode && x == 2){
+          mecanum.driveCartesian(0.33, 0, 0);
         }else if(x == 2){
           mecanum.driveCartesian(0, 0, 0);
           BRight.setSelectedSensorPosition(0);
@@ -385,19 +399,38 @@ public class Robot extends TimedRobot {
           BRight.setSelectedSensorPosition(0);
           x = 4;
         }
-        if(BRight.getSelectedSensorPosition() > -100*distEncode && x == 4){
-          mecanum.driveCartesian(-0.25, 0, 0);
+        if(BRight.getSelectedSensorPosition() > -103*distEncode && x == 4){
+          mecanum.driveCartesian(-0.33, 0, 0);
+        }else if(x == 4){
+          mecanum.driveCartesian(0, 0, 0);
           timer.reset();
-        }else if(x == 4 && timer.get() < 3){
+          x = 5;
+        }
+        if(x == 5 && timer.get() < 1){
+          mecanum.driveCartesian(0, 0, 0);
+        }else if (x == 5){
+          x = 6;
+        }
+        if(x == 6 && timer.get() < 2){
           mecanum.driveCartesian(0, 0, 0);
           shooter.set(1);
           intakeBelt.set(1);
-          x = 5;
-        }else if(x == 5){
+        }else if(x == 6){
           shooter.set(0);
           intakeBelt.set(0);
+          BRight.setSelectedSensorPosition(0);
+          x = 7;
         }
-        //the second else if has problems
+        if(BRight.getSelectedSensorPosition() < 75*distEncode && x == 7){
+          mecanum.driveCartesian(0.33, 0, 0);
+        }else if(x == 7){
+          mecanum.driveCartesian(0, 0, 0);
+          x = 8;
+        }if( x == 8 && navX.getAngle() < 1000){
+          mecanum.driveCartesian(0, 0, 0.30);
+        }else if( x == 8){
+          mecanum.driveCartesian(0, 0, 0);
+        }
       break;
       default:
         mecanum.driveCartesian(0, 0, 0);
